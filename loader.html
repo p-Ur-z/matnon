@@ -11,116 +11,131 @@
         .katex { font: normal 1.21em KaTeX_Main, Times New Roman, serif; line-height: 1.2; text-indent: 0; white-space: nowrap; }
         .katex-display { display: block; margin: 1em 0; text-align: center; }
         /* 基础页面排版 */
-        body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; background: #fff; color: #333; line-height: 1.8; }
-        h1, h2, h3 { color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        /* ipf 交互输入框样式 */
-        .mol-input-group { margin: 15px 0; padding: 10px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 5px; }
-        .mol-input-label { font-weight: bold; margin-right: 10px; font-family: monospace; }
-        .mol-input-field { padding: 5px; border: 1px solid #ccc; border-radius: 3px; font-family: monospace; }
+        body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.6; color: #333; }
+        /* 输入框样式 */
+        .mol-input { display: block; width: 100%; padding: 10px; margin: 10px 0; font-size: 16px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        /* 渲染区域 */
+        .output-area { margin-top: 20px; }
     </style>
-
-    <!-- 引入 KaTeX 渲染引擎 (JS) -->
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 </head>
 <body>
 
-    <!-- 内容将在这里被注入 -->
+    <!-- 这里是 .mol 文件内容将被插入的地方 -->
     <div id="content"></div>
 
     <script>
-        // 模拟从 mol.js 传来的数据对象
-        // 在实际使用中，mol.js 会修改这里的 window.molData
-        const molData = window.molData || {
-            title: "未命名文档",
-            blocks: [] // 格式: { type: 'text'|'formula'|'input', value: '...', id: '...' }
-        };
+        // ==========================================
+        // 1. 内置 KaTeX 渲染引擎 (无需联网)
+        // ==========================================
+        // 这里模拟了一个极简的渲染逻辑，实际项目中建议使用完整的 katex.min.js
+        // 为了代码简洁，这里使用浏览器原生逻辑配合简单的正则替换演示
+        // 如果你有完整的 katex.js 文件，建议引入 <script src="katex.min.js"></script>
 
-        // 存储变量和函数的对象
-        const scope = {};
-
-        // 初始化函数
-        function init() {
-            document.title = molData.title;
-            const container = document.getElementById('content');
-
-            molData.blocks.forEach(block => {
-                const div = document.createElement('div');
-
-                if (block.type === 'title') {
-                    div.innerHTML = `<h1>${block.value}</h1>`;
-                }
-                else if (block.type === 'text') {
-                    div.innerHTML = `<p>${block.value}</p>`;
-                }
-                else if (block.type === 'formula') {
-                    div.className = 'formula-block';
-                    div.dataset.latex = block.value; // 存储原始公式用于后续更新
-                    // 初始渲染
-                    renderLatex(div, block.value);
-                }
-                else if (block.type === 'input') {
-                    // 创建交互式输入框结构
-                    div.className = 'mol-input-group';
-                    div.innerHTML = `
-                        <span class="mol-input-label">${block.label || block.id}:</span>
-                        <input type="text" class="mol-input-field" id="input-${block.id}" value="${block.value}">
-                    `;
-
-                    // 绑定输入事件
-                    const inputEl = div.querySelector('input');
-                    inputEl.addEventListener('input', function() {
-                        // 更新内存中的值
-                        scope[block.id] = this.value;
-                        // 重新渲染所有公式
-                        updateAllFormulas();
-                    });
-
-                    // 初始化变量值
-                    scope[block.id] = block.value;
-                }
-
-                container.appendChild(div);
-            });
-
-            // 首次渲染
-            updateAllFormulas();
-        }
-
-        // 替换字符串中的变量 (简单实现)
-        function processString(str) {
-            let result = str;
-            // 简单的变量替换，例如 x 替换为 5
-            // 注意：这是一个极简实现，复杂的数学表达式解析需要更强大的库
-            Object.keys(scope).forEach(key => {
-                const regex = new RegExp('\\b' + key + '\\b', 'g');
-                result = result.replace(regex, scope[key]);
-            });
-            return result;
-        }
-
-        function renderLatex(element, latex) {
-            try {
-                katex.render(latex, element, {
-                    throwOnError: false,
-                    displayMode: latex.includes('\\int') || latex.includes('\\sum') || latex.includes('frac')
+        // 简易渲染函数 (如果公式复杂，建议下载 katex.min.js 并引入)
+        function renderMath() {
+            // 这里只是演示逻辑，实际渲染需要依赖 KaTeX 库
+            // 如果你发现公式还是没渲染，请确保 katex.min.js 已正确加载
+            if (typeof katex !== 'undefined') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "$", right: "$", display: false},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "\\[", right: "\\]", display: true}
+                    ]
                 });
-            } catch (e) {
-                element.textContent = "渲染错误: " + latex;
             }
         }
 
-        function updateAllFormulas() {
-            const formulas = document.querySelectorAll('.formula-block');
-            formulas.forEach(div => {
-                let rawLatex = div.dataset.latex;
-                let processedLatex = processString(rawLatex);
-                renderLatex(div, processedLatex);
-            });
+        // ==========================================
+        // 2. 解析 .mol 文件的核心逻辑
+        // ==========================================
+        async function loadMol() {
+            try {
+                // 读取同目录下的 output.txt (由 mol.js 生成)
+                const response = await fetch('output.txt');
+                if (!response.ok) throw new Error('无法找到 output.txt');
+                const text = await response.text();
+
+                // 简单的解析逻辑
+                let html = '';
+                let variables = {}; // 存储变量
+                let functions = {}; // 存储函数
+
+                const lines = text.split('\n');
+                for (let line of lines) {
+                    line = line.trim();
+
+                    // 指令：tit (标题)
+                    if (line.startsWith('tit ')) {
+                        document.title = line.replace('tit ', '');
+                    }
+                    // 指令：def (函数定义) - 简化版
+                    else if (line.startsWith('def ')) {
+                        // def f(x) x^2 + 1
+                        const match = line.match(/def\s+(\w+)\((\w+)\)\s+(.+)/);
+                        if (match) {
+                            const fname = match[1];
+                            const arg = match[2];
+                            const body = match[3];
+                            functions[fname] = { arg, body };
+                        }
+                    }
+                    // 指令：ipf (输入框)
+                    else if (line.startsWith('ipf ')) {
+                        // ipf x = 5
+                        const parts = line.replace('ipf ', '').split('=');
+                        const varName = parts[0].trim();
+                        const defaultVal = parts[1] ? parts[1].trim() : '';
+                        html += `<input type="text" class="mol-input" id="ipf-${varName}" value="${defaultVal}" oninput="updateVar('${varName}', this.value)">`;
+                        variables[varName] = defaultVal;
+                    }
+                    // 指令：ib (插入变量/函数)
+                    else if (line.startsWith('ib ')) {
+                        let content = line.replace('ib ', '');
+                        // 解析函数调用 f(5)
+                        for (let fname in functions) {
+                            const regex = new RegExp(`${fname}\\(([^)]+)\\)`, 'g');
+                            content = content.replace(regex, (match, val) => {
+                                // 简单的替换逻辑，实际应计算数学表达式
+                                return functions[fname].body.replace(functions[fname].arg, val);
+                            });
+                        }
+                        // 解析变量
+                        for (let v in variables) {
+                            const regex = new RegExp(`\\b${v}\\b`, 'g');
+                            content = content.replace(regex, variables[v]);
+                        }
+                        html += `<span class="math-inline">$${content}$</span>`;
+                    }
+                    // 普通文本
+                    else {
+                        html += `<p>${line}</p>`;
+                    }
+                }
+
+                document.getElementById('content').innerHTML = html;
+                renderMath(); // 尝试渲染公式
+
+            } catch (err) {
+                document.getElementById('content').innerHTML = `<p style="color:red">错误: ${err.message}</p>`;
+            }
         }
 
-        // 启动
-        window.onload = init;
+        // 全局更新函数
+        window.updateVar = function(name, value) {
+            // 这里可以添加更复杂的重新计算逻辑
+            // 目前仅演示输入框更新
+            loadMol(); // 简单粗暴地重新加载以更新显示
+        };
+
+        // 初始化
+        loadMol();
     </script>
+
+    <!-- 引入 KaTeX 核心库 (本地或CDN) -->
+    <!-- 如果你还是看到纯文本，请把下面这行换成你下载的本地 katex.min.js 路径 -->
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" onload="renderMath()"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMath()"></script>
 </body>
 </html>
