@@ -5,152 +5,178 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>.mol 渲染器</title>
 
-    <!-- 内嵌 KaTeX 样式，保证离线也能显示公式 -->
+    <!-- 1. 内嵌 KaTeX 样式 (防网络加载失败) -->
     <style>
-        /* KaTeX 核心样式 */
+        /* KaTeX 样式 */
         .katex { font: normal 1.21em KaTeX_Main, Times New Roman, serif; line-height: 1.2; text-indent: 0; white-space: nowrap; }
         .katex-display { display: block; margin: 1em 0; text-align: center; }
         .katex-html { display: none; }
 
-        /* 页面排版 */
+        /* 页面基础样式 */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.6; color: #333; background-color: #fff; }
         h1, h2, h3 { color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
-        /* 输入框美化 */
-        .mol-input { display: block; width: 100%; padding: 10px; margin: 15px 0; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; background: #f8f9fa; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 2em 0; }
+
+        /* 输入框样式 - 关键修复 */
+        .mol-input {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 15px 0;
+            font-size: 16px;
+            border: 2px solid #3498db; /* 明显的边框 */
+            border-radius: 6px;
+            box-sizing: border-box;
+            background-color: #f8f9fa;
+            transition: border-color 0.2s;
+        }
+        .mol-input:focus {
+            outline: none;
+            border-color: #2980b9;
+            background-color: #fff;
+            box-shadow: 0 0 8px rgba(41, 128, 185, 0.2);
+        }
+
         /* 错误提示 */
-        .error-box { background: #ffeaea; color: #d8000c; padding: 15px; border-radius: 5px; border: 1px solid #d8000c; margin-top: 20px; font-family: monospace; white-space: pre-wrap; }
+        .error-log { color: red; background: #ffeaea; padding: 10px; border-radius: 4px; font-family: monospace; margin-top: 20px; }
     </style>
 
-    <!-- 引入 KaTeX 渲染库 (如果离线无法加载，下面的脚本会自动处理) -->
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <!-- 2. 内嵌 KaTeX 脚本 (防网络加载失败) -->
+    <!-- 这里使用了极简的 KaTeX 渲染逻辑 -->
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 </head>
 <body>
 
-    <div id="content">加载中...</div>
+    <!-- 内容将渲染在这里 -->
+    <div id="content"></div>
 
     <script>
-        // 全局变量存储
-        let variables = {}; // 存储变量值
-        let functions = {}; // 存储函数定义
+        // ==========================================
+        // 核心配置：在这里修改你的 .mol 文件路径
+        // ==========================================
+        const MOL_FILE_PATH = 'test.mol';
 
-        // 核心加载函数
+        // 全局变量存储
+        let variables = { x: 5, y: 10 }; // 默认变量
+        let functions = {}; // 默认函数
+
+        // 主加载函数
         async function loadMol() {
             try {
-                // 1. 获取文件路径 (比如 ?file=demo.mol)
-                const urlParams = new URLSearchParams(window.location.search);
-                const filePath = urlParams.get('file') || 'demo.mol'; // 默认读取 demo.mol
-
-                // 2. 读取文件内容
-                const response = await fetch(filePath);
-                if (!response.ok) throw new Error(`找不到文件: ${filePath}`);
-                let text = await response.text();
-
-                // 3. 【关键修复】预处理文本，防止特殊字符导致代码崩溃
-                // 将 Windows 换行符统一为 Unix 换行符，防止解析错误
-                text = text.replace(/\r\n/g, '\n');
-
-                let html = '';
-
-                // 4. 逐行解析
-                const lines = text.split('\n');
-                for (let rawLine of lines) {
-                    let line = rawLine.trim();
-
-                    // 跳过空行
-                    if (!line) continue;
-
-                    // --- 指令解析 ---
-
-                    // 1. 标题: tit
-                    if (line.startsWith('tit ')) {
-                        let content = line.replace('tit ', '');
-                        // 简单的层级判断
-                        if(content.startsWith('#')) html += `<h1>${content.replace('#', '')}</h1>`;
-                        else html += `<h2>${content}</h2>`;
-                    }
-                    // 2. 函数定义: def f(x) = x^2 (简化模拟)
-                    else if (line.startsWith('def ')) {
-                        // 这里仅做标记，实际计算需要复杂的数学引擎，此处仅演示渲染
-                        let defText = line.replace('def ', '');
-                        html += `<p style="color:#666; font-style:italic;">[定义函数: ${defText}]</p>`;
-                    }
-                    // 3. 输入框: ipf
-                    else if (line.startsWith('ipf ')) {
-                        // ipf 变量名=默认值
-                        let parts = line.replace('ipf ', '').split('=');
-                        let varName = parts[0].trim();
-                        let defaultVal = parts[1] ? parts[1].trim() : '';
-
-                        // 存储变量
-                        variables[varName] = defaultVal;
-
-                        // 生成 HTML 输入框，绑定全局更新函数
-                        html += `
-                            <input
-                                type="text"
-                                class="mol-input"
-                                value="${defaultVal}"
-                                oninput="window.updateVar('${varName}', this.value)"
-                                placeholder="输入 ${varName}"
-                            />`;
-                    }
-                    // 4. 插入内容: ib
-                    else if (line.startsWith('ib ')) {
-                        let content = line.replace('ib ', '');
-                        // 简单的变量替换 ${x} -> 5
-                        for (let [k, v] of Object.entries(variables)) {
-                            let regex = new RegExp('\\$\\{' + k + '\\}', 'g');
-                            content = content.replace(regex, v);
-                        }
-                        // 渲染为公式
-                        html += `$$${content}$$`;
-                    }
-                    // 5. 普通文本/公式
-                    else {
-                        // 如果包含 $ 符号，视为公式
-                        if (line.includes('$')) {
-                            html += `$$${line}$$`;
-                        } else {
-                            html += `<p>${line}</p>`;
-                        }
-                    }
-                }
-
-                // 5. 输出到页面
-                document.getElementById('content').innerHTML = html;
-
-                // 6. 渲染数学公式
-                if (window.renderMathInElement) {
-                    renderMathInElement(document.body, {
-                        delimiters: [
-                            {left: "$$", right: "$$", display: true},
-                            {left: "$", right: "$", display: false}
-                        ]
-                    });
-                }
-
+                const response = await fetch(MOL_FILE_PATH + '?t=' + new Date().getTime()); // 加时间戳防止缓存
+                if (!response.ok) throw new Error(`无法加载文件: ${response.status}`);
+                const text = await response.text();
+                parseAndRender(text);
             } catch (err) {
-                // 错误处理：不再打印代码，而是打印友好的提示
-                console.error(err);
-                document.getElementById('content').innerHTML = `
-                    <div class="error-box">
-                        <strong>加载失败：</strong> ${err.message}
-                        <hr/>
-                        <small>请确保 .mol 文件和 loader.html 在同一文件夹内。</small>
-                    </div>`;
+                document.getElementById('content').innerHTML = `<div class="error-log">加载失败: ${err.message}<br>请确保 test.mol 和 loader.html 在同一文件夹。</div>`;
             }
         }
 
-        // 全局更新函数（供输入框调用）
+        // 解析与渲染逻辑
+        function parseAndRender(text) {
+            let html = '';
+            const lines = text.split('\n');
+
+            for (let line of lines) {
+                line = line.trim();
+                if (!line) continue;
+
+                try {
+                    // --- 1. 处理指令 ---
+                    if (line.startsWith('tit ')) {
+                        const content = line.substring(4).trim();
+                        html += `<h1>${content}</h1>`;
+                    }
+                    else if (line.startsWith('def ')) {
+                        // 解析 def f(x) = x+1
+                        const match = line.match(/def\s+([a-zA-Z0-9_]+)\(([^)]+)\)\s*=\s*(.+)/);
+                        if (match) {
+                            const fname = match[1];
+                            const argName = match[2];
+                            const body = match[3];
+                            // 动态创建函数
+                            functions[fname] = new Function(argName, `
+                                with(variables) {
+                                    return (${body});
+                                }
+                            `);
+                        }
+                    }
+                    else if (line.startsWith('ipf ')) {
+                        // 解析 ipf x=5
+                        const parts = line.substring(4).trim().split('=');
+                        const varName = parts[0].trim();
+                        const defaultVal = parts[1] ? parts[1].trim() : '0';
+
+                        // 生成输入框 HTML，并绑定 oninput 事件
+                        html += `<input type="text"
+                                    class="mol-input"
+                                    value="${defaultVal}"
+                                    oninput="updateVar('${varName}', this.value)">`;
+
+                        // 初始化变量
+                        variables[varName] = parseFloat(defaultVal) || 0;
+                    }
+                    else if (line.startsWith('ib ')) {
+                        // 内容插入 ib {content}
+                        let content = line.substring(3).trim();
+                        // 替换变量
+                        for (let v in variables) {
+                            const regex = new RegExp(`\\$${v}\\b`, 'g');
+                            content = content.replace(regex, variables[v]);
+                        }
+                        // 替换函数调用
+                        for (let f in functions) {
+                            const regex = new RegExp(`${f}\\(([^)]+)\\)`, 'g');
+                            content = content.replace(regex, (match, arg) => {
+                                try {
+                                    // 尝试计算函数
+                                    return functions[f](eval(arg));
+                                } catch(e) { return match; }
+                            });
+                        }
+                        html += `<p>${content}</p>`;
+                    }
+                    else if (line.startsWith('hr')) {
+                        html += '<hr>';
+                    }
+                    else {
+                        // 普通文本/公式
+                        html += `<p>${line}</p>`;
+                    }
+                } catch (e) {
+                    console.error('解析行出错:', line, e);
+                }
+            }
+
+            // 更新 DOM
+            document.getElementById('content').innerHTML = html;
+
+            // 渲染数学公式
+            if (window.renderMathInElement) {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "$", right: "$", display: false}
+                    ]
+                });
+            }
+        }
+
+        // 暴露给全局，供输入框调用
         window.updateVar = function(name, value) {
-            variables[name] = value;
-            // 简单的刷新机制：重新加载
+            // 更新变量值
+            variables[name] = parseFloat(value) || 0;
+            console.log(`变量 ${name} 更新为:`, variables[name]);
+            // 重新加载并渲染
             loadMol();
         };
 
         // 初始化
         loadMol();
+
     </script>
 </body>
 </html>
