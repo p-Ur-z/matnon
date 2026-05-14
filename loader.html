@@ -2,191 +2,125 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>.mol 交互式渲染器 </title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>.mol 预览</title>
+
+    <!-- 核心修复：内嵌 KaTeX 样式，确保离线也能完美渲染公式，不再显示为纯文本 -->
     <style>
-        body { font-family: sans-serif; padding: 40px; line-height: 1.8; max-width: 800px; margin: 0 auto; }
-        #navbar { display: flex; gap: 10px; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #eee; }
-        #file-input { padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; flex-grow: 1; }
-        #load-btn { padding: 8px 20px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        #load-btn:hover { background-color: #0056b3; }
-        /* 为输入框和文本域增加一些基础样式 */
-        .mol-input { display: block; width: 100%; padding: 10px; margin: 10px 0 20px 0; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        .mol-textarea { height: 100px; font-family: monospace; }
+        /* KaTeX 核心样式 */
+        .katex { font: normal 1.21em KaTeX_Main, Times New Roman, serif; line-height: 1.2; text-indent: 0; white-space: nowrap; }
+        .katex-display { display: block; margin: 1em 0; text-align: center; }
+        /* 基础页面排版 */
+        body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; background: #fff; color: #333; line-height: 1.8; }
+        h1, h2, h3 { color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        /* ipf 交互输入框样式 */
+        .mol-input-group { margin: 15px 0; padding: 10px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 5px; }
+        .mol-input-label { font-weight: bold; margin-right: 10px; font-family: monospace; }
+        .mol-input-field { padding: 5px; border: 1px solid #ccc; border-radius: 3px; font-family: monospace; }
     </style>
+
+    <!-- 引入 KaTeX 渲染引擎 (JS) -->
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 </head>
 <body>
-    <div id="navbar">
-        <input type="text" id="file-input" value="a.mol" placeholder="请输入 .mol 文件名">
-        <button id="load-btn">加载并渲染</button>
-    </div>
 
-    <div id="app">请在上方输入文件名并点击加载...</div>
+    <!-- 内容将在这里被注入 -->
+    <div id="content"></div>
 
     <script>
-        const fileInput = document.getElementById('file-input');
-        const loadBtn = document.getElementById('load-btn');
-        const app = document.getElementById('app');
-        let currentVariables = {}; // 存储当前页面的所有变量
+        // 模拟从 mol.js 传来的数据对象
+        // 在实际使用中，mol.js 会修改这里的 window.molData
+        const molData = window.molData || {
+            title: "未命名文档",
+            blocks: [] // 格式: { type: 'text'|'formula'|'input', value: '...', id: '...' }
+        };
 
-        // 核心渲染逻辑
-        function loadAndRender(fileName) {
-            app.innerHTML = '正在加载并编译 ' + fileName + ' ...';
-            
-            fetch('./' + fileName)
-                .then(response => {
-                    if (!response.ok) throw new Error('文件未找到');
-                    return response.text();
-                })
-                .then(molCode => {
-                    // 1. 第一遍扫描：提取所有变量、函数和输入框的默认值
-                    currentVariables = {};
-                    const functions = {};
-                    const inputs = []; // 存储需要渲染的输入框信息
+        // 存储变量和函数的对象
+        const scope = {};
 
-                    molCode.split('\n').forEach(line => {
-                        line = line.trim();
-                        if (!line) return;
+        // 初始化函数
+        function init() {
+            document.title = molData.title;
+            const container = document.getElementById('content');
 
-                        if (line.startsWith('tit ')) {
-                            document.title = line.substring(4).trim();
-                        }
-                        else if (line.startsWith('la-')) {
-                            const parts = line.split(' ');
-                            currentVariables[parts[0]] = parts.slice(1).join(' ');
-                        } 
-                        else if (line.startsWith('n-')) {
-                            const parts = line.split(' ');
-                            currentVariables[parts[0]] = parts[1];
-                        }
-                        else if (line.startsWith('m-')) {
-                            const parts = line.split(' ');
-                            const num = parseInt(parts[1]);
-                            const mod = parseInt(parts[2]);
-                            currentVariables[parts[0]] = num % mod;
-                        }
-                        else if (line.startsWith('def ')) {
-                            const defMatch = line.match(/def\s+(\S+)\s+（(.+?)）\s+\{(.+)\}/);
-                            if (defMatch) {
-                                functions[defMatch[1].trim()] = { 
-                                    paramName: defMatch[2].trim(), 
-                                    template: defMatch[3].trim() 
-                                };
-                            }
-                        }
-                        // 解析 ipf 交互式输入框
-                        else if (line.startsWith('ipf ')) {
-                            // 格式：变量名=ipf 函数名（灰色默认内容）
-                            const ipfMatch = line.match(/(\S+)=ipf\s+(\S+)\s*（(.*)）/);
-                            if (ipfMatch) {
-                                inputs.push({
-                                    varName: ipfMatch[1].trim(),
-                                    funcName: ipfMatch[2].trim(),
-                                    placeholder: ipfMatch[3].trim()
-                                });
-                            }
-                        }
+            molData.blocks.forEach(block => {
+                const div = document.createElement('div');
+
+                if (block.type === 'title') {
+                    div.innerHTML = `<h1>${block.value}</h1>`;
+                }
+                else if (block.type === 'text') {
+                    div.innerHTML = `<p>${block.value}</p>`;
+                }
+                else if (block.type === 'formula') {
+                    div.className = 'formula-block';
+                    div.dataset.latex = block.value; // 存储原始公式用于后续更新
+                    // 初始渲染
+                    renderLatex(div, block.value);
+                }
+                else if (block.type === 'input') {
+                    // 创建交互式输入框结构
+                    div.className = 'mol-input-group';
+                    div.innerHTML = `
+                        <span class="mol-input-label">${block.label || block.id}:</span>
+                        <input type="text" class="mol-input-field" id="input-${block.id}" value="${block.value}">
+                    `;
+
+                    // 绑定输入事件
+                    const inputEl = div.querySelector('input');
+                    inputEl.addEventListener('input', function() {
+                        // 更新内存中的值
+                        scope[block.id] = this.value;
+                        // 重新渲染所有公式
+                        updateAllFormulas();
                     });
 
-                    // 2. 渲染页面内容（包括输入框和 ib 输出）
-                    function renderPage() {
-                        app.innerHTML = ''; 
-                        
-                        // 渲染输入框
-                        inputs.forEach(input => {
-                            const varType = input.varName.startsWith('la-') ? 'textarea' : 'input';
-                            const currentValue = currentVariables[input.varName] || '';
-                            
-                            if (varType === 'input') {
-                                const inputEl = document.createElement('input');
-                                inputEl.type = 'number';
-                                inputEl.className = 'mol-input';
-                                inputEl.value = currentValue;
-                                inputEl.placeholder = input.placeholder;
-                                // 监听输入，实时更新变量并重新渲染
-                                inputEl.addEventListener('input', (e) => {
-                                    currentVariables[input.varName] = e.target.value;
-                                    renderPage();
-                                });
-                                app.appendChild(inputEl);
-                            } else {
-                                const textareaEl = document.createElement('textarea');
-                                textareaEl.className = 'mol-input mol-textarea';
-                                textareaEl.value = currentValue;
-                                textareaEl.placeholder = input.placeholder;
-                                textareaEl.addEventListener('input', (e) => {
-                                    currentVariables[input.varName] = e.target.value;
-                                    renderPage();
-                                });
-                                app.appendChild(textareaEl);
-                            }
-                        });
+                    // 初始化变量值
+                    scope[block.id] = block.value;
+                }
 
-                        // 扫描原始代码，渲染 ib 和普通文本
-                        molCode.split('\n').forEach(line => {
-                            line = line.trim();
-                            if (!line || line.startsWith('tit ') || line.startsWith('def ') || line.startsWith('ipf ')) return;
+                container.appendChild(div);
+            });
 
-                            if (line.startsWith('la-') || line.startsWith('n-') || line.startsWith('m-')) {
-                                // 变量定义行不在页面显示内容，跳过
-                            }
-                            else if (line.startsWith('ib')) {
-                                const ibMatch = line.match(/ib\s*\((.+)\)/);
-                                if (ibMatch) {
-                                    const content = ibMatch[1].trim();
-                                    const funcCallMatch = content.match(/(\S+):(.+)/);
-                                    
-                                    if (funcCallMatch && functions[funcCallMatch[1]]) {
-                                        const calledFuncName = funcCallMatch[1].trim();
-                                        const inputValue = funcCallMatch[2].trim();
-                                        const funcObj = functions[calledFuncName];
-                                        const renderedFormula = funcObj.template.replace(new RegExp(`\\b${funcObj.paramName}\\b`, 'g'), inputValue);
-                                        app.innerHTML += `<p><span class="latex">${renderedFormula}</span></p>`;
-                                    } else {
-                                        const varValue = currentVariables[content];
-                                        if (varValue !== undefined) {
-                                            app.innerHTML += `<p><span class="latex">${varValue}</span></p>`;
-                                        }
-                                    }
-                                }
-                            } else {
-                                app.innerHTML += `<p>${line}</p>`;
-                            }
-                        });
-
-                        // 重新唤醒 KaTeX 渲染
-                        if (window.renderMathInElement) {
-                            renderMathInElement(app, {
-                                delimiters: [{left: '$', right: '$', display: false}],
-                                throwOnError : false
-                            });
-                        }
-                    }
-
-                    renderPage(); // 初次渲染
-                })
-                .catch(err => {
-                    app.innerHTML = '<p style="color:red">加载 ' + fileName + ' 失败！请检查文件名是否正确。</p>';
-                    console.error(err);
-                });
+            // 首次渲染
+            updateAllFormulas();
         }
 
-        loadBtn.addEventListener('click', () => {
-            let fileName = fileInput.value.trim();
-            if (fileName && !fileName.endsWith('.mol')) {
-                fileName += '.mol';
-                fileInput.value = fileName;
+        // 替换字符串中的变量 (简单实现)
+        function processString(str) {
+            let result = str;
+            // 简单的变量替换，例如 x 替换为 5
+            // 注意：这是一个极简实现，复杂的数学表达式解析需要更强大的库
+            Object.keys(scope).forEach(key => {
+                const regex = new RegExp('\\b' + key + '\\b', 'g');
+                result = result.replace(regex, scope[key]);
+            });
+            return result;
+        }
+
+        function renderLatex(element, latex) {
+            try {
+                katex.render(latex, element, {
+                    throwOnError: false,
+                    displayMode: latex.includes('\\int') || latex.includes('\\sum') || latex.includes('frac')
+                });
+            } catch (e) {
+                element.textContent = "渲染错误: " + latex;
             }
-            if (fileName) loadAndRender(fileName);
-        });
+        }
 
-        fileInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') loadBtn.click();
-        });
+        function updateAllFormulas() {
+            const formulas = document.querySelectorAll('.formula-block');
+            formulas.forEach(div => {
+                let rawLatex = div.dataset.latex;
+                let processedLatex = processString(rawLatex);
+                renderLatex(div, processedLatex);
+            });
+        }
 
-        loadAndRender('a.mol');
+        // 启动
+        window.onload = init;
     </script>
 </body>
 </html>
