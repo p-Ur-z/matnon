@@ -1,0 +1,56 @@
+tit .mol 语言官方使用手册
+la-welcome \text{欢迎使用 .mol 语言！}
+la-einstein E = mc^2
+la-integral \int_{0}^{\infty} e^{-x^2} dx = \frac{\sqrt{\pi}}{2}
+n-pi 3.1415926
+la-myFormula x^2 + y^2
+
+ib (la-welcome)
+.mol 是一门专为数学排版与科学笔记设计的领域特定语言（DSL）。它允许你用极简的语法书写 LaTeX 公式，并直接编译成精美的静态网页。
+
+核心语法速览
+1. 网页标题设置
+使用 tit 指令可以快速定义生成网页的浏览器标签标题。
+例如：tit 我的物理笔记
+
+2. 变量存储与渲染
+la- 用于存储 LaTeX 数学公式代码，n- 用于存储普通数字。
+使用 ib (变量名) 即可将存储的内容渲染到网页上。
+演示：爱因斯坦质能方程 
+ib (la-einstein)
+
+3. 函数定义与调用 (def)
+使用 def 指令可以定义一个带有自变量的 LaTeX 模板函数。
+语法：def 函数名 （自变量名）{LaTeX公式模板}
+调用：ib (函数名:传入值)
+例如：def f （x）{x^2 + 1}
+调用 ib (f:5) 将渲染出 5^2 + 1 的公式效果。
+
+4. 交互式输入框 (ipf)
+使用 ipf 指令可以在网页上生成可交互的输入框，修改输入框内容会实时更新变量。
+语法：变量名=ipf 变量类型（灰色占位提示文字）
+演示：请在下方输入框修改数值
+radius=ipf n-radius（请输入圆的半径）
+当前半径 r = 
+ib (n-radius)
+
+演示：请在下方修改 LaTeX 公式
+myFormula=ipf la-myFormula（请输入 LaTeX 公式）
+你输入的公式是：
+ib (la-myFormula)
+
+5. 自动数学计算与精度控制
+is 指令可以对存储的算式进行自动计算，并保留指定的小数位。
+演示：圆周率保留 4 位小数 
+is(n-pi)*4
+ib (n-pi)
+
+6. 复杂的 LaTeX 排版
+.mol 完美支持各类复杂的 LaTeX 数学符号，如积分、求和、分数等。
+演示：高斯积分公式
+ib (la-integral)
+
+快速上手
+1. 在本地新建一个 .mol 文件（如 a.mol），写入上述纯净的 .mol 语法。
+2. 实时预览：将文件与 loader.html 放在同一目录，通过 VS Code 的 Live Server 打开 loader.html 即可实时查看渲染效果。
+3. 编译发布：在终端运行 node mol.js，它会生成一个完全独立的 output.html。你可以将这个文件直接上传到 GitHub Pages，分享给任何人查看！
